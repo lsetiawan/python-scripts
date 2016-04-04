@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 import os,subprocess,shutil,string
+import gdal
+import numpy as np
+gdal.UseExceptions()
 
 def sort_to_folder(path,months,path1):
 	print path
@@ -28,84 +31,70 @@ def make_folder(path):
 				print "Creating Directory: " + str(month)
 				os.makedirs(directory)
 
-def rasterCalc(path,months,alphabet,climatology,whichProp,origin):
+def rasterCalc(path,months,climatology,whichProp,userInput):
 	print path
-	print months
-	print alphabet
-	calcSUM = " "
+	if not os.path.exists(climatology):
+		os.makedirs(climatology)
+	
+	data = []
+	arrays = []
+	
 	for i in range(0,len(months)):
 		os.chdir(os.path.join(path,months[i][2]))
 		print os.getcwd()
-		if not os.path.exists(os.path.join(climatology,months[i][1])):
-			os.makedirs(os.path.join(climatology,months[i][1]))
-		#for j in range(0,len(os.listdir('.'))):
-		#	print j
-		Alpha = []
-		addAlpha = []
-		filelist = []
-		addition = []
-		filenum = []
 
 		for files in os.listdir('.'):
 			if ".tif" in files and ".aux.xml" not in files and ".DS_Store" not in files:
-				filenum.append(files)
-		print "There are {} files".format(len(filenum))
-		length = len(filenum)
-		if length > 25:
-			for j in range(0,len(filenum),26):
-				for k in range(0,26):
-					if j + k < len(filenum):
-						newfile = "-{0} {1}".format(alphabet[k],filenum[j+k])
-						filelist.append(newfile)
-						Alpha.append("{}".format(alphabet[k]))
+				data.append(gdal.Open(files))
+		dataTotal = len(data)
+		print "There are {} files".format(dataTotal)
 		
-		for m in range(0,len(filelist),26):
-			addition.append(filelist[m:26+m])
-			addAlpha.append(Alpha[m:26+m])
+		for j in range(0,dataTotal):
+			arrays.append(np.array(data[j].ReadAsArray()))
 		
-		for l in range(0,len(addition)):
-			strlist_file = ' '.join(addition[l])
-			strlist_calc = '+'.join(addAlpha[l])
-			calcSUM = "({0})".format(strlist_calc)	
-			print calcSUM
-			print strlist_file
-			print calcSUM
-			os.system("gdal_calc.py {0} {1} {2} {3} {4} {5} {6}".\
-				format(strlist_file,"--outfile={0}{1}_{2}.tif".format(os.path.join(os.path.join(climatology,months[i][1]),"{}_".format(whichProp)),months[i][1],l),
-					"--calc=\"{}\"".format(calcSUM),"--NoDataValue=-3.4028234663852886e+38",
-					"--type=Float32","--overwrite","--NoDataValue=-9999"))
+		meanArray = np.mean(arrays,axis=0)
+		
+		#Get data about original files
+		[cols,rows] = arrays[0].shape
+		trans = data[0].GetGeoTransform()
+		proj = data[0].GetProjection()
+		nodataval = data[0].GetRasterBand(1).GetNoDataValue()
+		print [cols,rows]
+		print trans
+		print proj
+		print nodataval
+		
+		# Convert Array into GeoTiff
+		outfile = os.path.join(climatology,"{0}_{1}.tif".format(whichProp,months[i][2]))
+		outdriver = gdal.GetDriverByName("GTiff")
+		outdata = outdriver.Create(str(outfile), rows, cols, 1, gdal.GDT_Float32)
+		outdata.GetRasterBand(1).WriteArray(meanArray)
+		if nodataval == None and userInput == "MOD13A3":
+			outdata.GetRasterBand(1).SetNoDataValue(-3000)
+		elif nodataval == None and userInput == "PRISM":
+			outdata.GetRasterBand(1).SetNoDataValue(-9999)
+		else:
+			outdata.GetRasterBand(1).SetNoDataValue(nodataval)
+		outdata.SetGeoTransform(trans)
+		outdata.SetProjection(proj)
+		
+		data = []
+		arrays = []
+	if userInput == "MOD13A3":
+		finalClip(climatology)
 
-	rasterMean(climatology,months,alphabet,calcSUM,length,whichProp)
-
-def rasterMean(path,months,alphabet,calcSUM,length,whichProp):
-	os.chdir(path)
-	fileArray = []
-	alphaArray = []
-	alphaAdd = []
-	for i in range(0,len(months)):
-		os.chdir(os.path.join(path,months[i][1]))
-		for files in os.listdir('.'):
-			if ".tif" in files and ".aux.xml" not in files and ".DS_Store" not in files:
-				fileArray.append(files)
-		for j in range(0,len(fileArray)):
-			alphaArray.append("-{0} {1}".format(alphabet[j],fileArray[j]))
-			alphaAdd.append("{}".format(alphabet[j]))
-		for l in range(0,len(alphaArray)):
-			strlist_file = ' '.join(alphaArray[l])
-			strlist_calc = '+'.join(alphaAdd[l])
-			calcSUM = "({0})/{1}".format(strlist_calc,length)	
-			print calcSUM
-			print strlist_file
-			print calcSUM
-			os.system("gdal_calc.py {0} {1} {2} {3} {4} {5} {6}".\
-				format(strlist_file,"--outfile={0}{1}_{2}.tif".format(os.path.join(path,"{}_".format(whichProp)),months[i][1],l),
-					"--calc=\"{}\"".format(calcSUM),"--NoDataValue=-3.4028234663852886e+38",
-					"--type=Float32","--overwrite","--NoDataValue=-9999"))
-			
-
-	os.chdir(path)
+def finalClip(climatology):
+	os.chdir(climatology)
+	directory = "EVI_Final"
+	if not os.path.exists(directory):
+		os.makedirs(directory)
+	for files in os.listdir('.'):
+		if "EVI_Final" not in files:
+			subprocess.call(['gdal_translate', '-projwin', '-127.829', '49.9184', 
+			'-59.0521', '5.17714', '-of', 'GTiff', files, os.path.join(directory,files)])
+		
 	
-	print fileArray
+
 
 ## Function for PRISM
 def goFolder(path,path1,months):
@@ -137,21 +126,21 @@ def main():
 			  ["11_01", "November", "11"],
 			  ["12_01", "December", "12"]]
 	if userInput == "MOD13A3":
-		alphabet = list(string.ascii_uppercase)
 		desired_path = "MOD13A3_TIF_epsg4326"
+		whichProp = "EVI"
+		path1 = os.path.join(os.getcwd(),whichProp)
+		climatology = os.path.join(os.getcwd(),"{0}{1}".format(whichProp,"_climatology"))
 		make_folder(os.path.join(os.getcwd(),desired_path))
-		sort_to_folder(os.getcwd(),months)
-		rasterCalc(os.getcwd(),months,alphabet)
+		sort_to_folder(os.getcwd(),months,path1)
+		rasterCalc(os.getcwd(),months,climatology,whichProp,userInput)
 	if userInput == "PRISM":
-		alphabet = list(string.ascii_uppercase)
-		origin = os.path.join(os.getcwd(),"PRISM")
 		os.chdir(os.path.join(os.getcwd(),"PRISM"))
 		whichProp = raw_input("Which property would you like? [ppt or tmean]: ")
 		path1 = os.path.join(os.getcwd(),whichProp)
 		climatology = os.path.join(os.getcwd(),"{0}{1}".format(whichProp,"_climatology"))
 		make_folder(os.path.join(path1))
 		goFolder(os.getcwd(),path1,months)
-		#rasterCalc(os.getcwd(),months,alphabet,climatology,whichProp,origin)
+		rasterCalc(os.getcwd(),months,climatology,whichProp,userInput)
 	
 if __name__ == '__main__' :
 	main()
