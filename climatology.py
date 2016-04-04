@@ -80,6 +80,10 @@ def rasterCalc(path,months,climatology,whichProp,userInput):
 		
 		data = []
 		arrays = []
+		
+	data = None
+	outdata = None
+	
 	if userInput == "MOD13A3":
 		finalClip(climatology)
 
