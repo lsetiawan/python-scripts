@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+''' Import the Necessary Libraries '''
 import os
 import pymodis.downmodis as pmod
 import numpy as np
@@ -7,6 +8,10 @@ import subprocess
 from datetime import date, timedelta 
 
 def makeFolder(basepath, foldername):
+    ''' 
+    Function used to create the MOD13A3.006 Folders and for each dates 
+
+    '''
     maindir = "MOD13A3.006"
     if not os.path.exists(maindir):
         print "Creating {}".format("MOD13A3.006")
@@ -17,8 +22,12 @@ def makeFolder(basepath, foldername):
             print "Creating {}".format(folder)
             os.makedirs(folder)
 
-# Function to download MODIS tiles from USGS ftp server
 def performDownload(tilelist,dates, i, work_path):
+    '''
+    Downloads MODIS tiles from USGS ftp server and save them to the appropriate
+    date folder 
+    
+    '''
     print ""
     print "Working on {0} to {1}".format(dates[i], dates[i+1])
     print "Files are saved in {}".format(work_path)
@@ -34,7 +43,6 @@ def performDownload(tilelist,dates, i, work_path):
     dm.downloadsAllDay()
     
             
-    
 
 def makeFileName(x, ext = "tif"):
     """
@@ -47,6 +55,12 @@ def makeFileName(x, ext = "tif"):
     return base + '.' + ext
 
 def processHDF(folder,work_path):
+    '''
+    Perfom processing for the .hdf MODIS Tiles. Reads the data, grab only the desired subdataset,
+    in this case the EVI. Next, GDAL library is used to create numpy array and save the array as 
+    GeoTiff in the appropriate folder.
+    
+    '''
     if ".tif" not in folder:
         print "Now converting hdf for {}".format(folder)
         os.chdir(work_path)
@@ -65,26 +79,26 @@ def processHDF(folder,work_path):
                 QA_np = QA_src.ReadAsArray()
         
         
-			# Let's take a quick look at the dimension of that first array
+			     # Let's take a quick look at the dimension of that first array
                 cols, rows = vi_np.shape
-			# Perform value replacement and drop QA layer
+			     # Perform value replacement and drop QA layer
                 vi_np[np.logical_and(QA_np != 0, QA_np != 1)] = -3000
-			# De-allocate QA array
+			     # De-allocate QA array
                 QA_np = None
-			# Get Geotransforms and projection of original dataset
+			     # Get Geotransforms and projection of original dataset
                 geoT = vi_src.GetGeoTransform()
                 proj = vi_src.GetProjection()
         
-			# Create new dataset to write array to
+			     # Create new dataset to write array to
                 outfile_name = os.path.join(os.getcwd(), makeFileName(hdf, 'tif'))
                 driver = gdal.GetDriverByName('GTiff')
-			# Create empty dataset using array dimentions
+			     # Create empty dataset using array dimentions
                 dataset = driver.Create(outfile_name, cols, rows, 1, gdal.GDT_Int16)
                 dataset.SetGeoTransform(geoT)
                 dataset.SetProjection(proj)
                 dataset.GetRasterBand(1).SetNoDataValue(-3000)
                 dataset.GetRasterBand(1).WriteArray(vi_np)
-			# Close datasets and unallocate arrays
+			     # Close datasets and unallocate arrays
                 dataset = None
                 vi_np = None
                 QA_np = None
@@ -92,6 +106,11 @@ def processHDF(folder,work_path):
                 QA_src = None
 
 def reprojectTile(path, end_date, i):
+    '''
+    Reprojection is performed after .hdf is converted to .tif. The tiles are reprojected to 
+    EPSG:4326 by using gdalwarp.
+    
+    '''
     if not os.path.exists(os.path.join(path,"EPSG436")):       
         os.makedirs(os.path.join(path,'EPSG4326'))
         print "Creating folder: EPSG4326"
@@ -111,7 +130,11 @@ def reprojectTile(path, end_date, i):
     return newpath
     
 def mosaicTile(newpath,folder, path, basepath):
-    #gdal_merge.py -o ~/Documents/MOD13A3_TIF/"MOD13A3_$current".tif ./*.tif
+    '''
+    Using gdalmerge.py the EPSG:4326 GeoTiffs are mosaiced together to create a complete map of 
+    the specified date.
+    
+    '''
     for j in os.listdir(path):
         if ".tif" in j:
             print "Removing {}".format(j)
@@ -127,10 +150,15 @@ def mosaicTile(newpath,folder, path, basepath):
 	
 	
 
-# Function to create list of tiles to download.
-# In this case, MODIS tiles around lower 48 and central america are downloaded
-# Tiles are based on sinusoidal projection by NASA
+
 def createTiles():
+    ''' 
+    Function to create list of tiles to download.
+    In this case, MODIS tiles around lower 48 and central america are downloaded
+    Tiles are based on sinusoidal projection by NASA
+    
+    '''
+
     h = []
     v = []
     tile = []
@@ -152,8 +180,11 @@ def createTiles():
     return tile
 
 
-# Function to create list of dates in the format for pyModis to ingest
 def createDates(startyear, endyear):
+    '''
+    Function to create list of dates in the format for pyModis to ingest
+
+    '''
     folderlist = []
     datelist = []
     for year in range(startyear, (endyear + 1)):
@@ -167,6 +198,10 @@ def createDates(startyear, endyear):
     return folderlist, datelist
 
 def getDeltas(dates):
+    '''
+    Create list of days between the monthly date 
+
+    '''
     comma_date = []
     end_date = []
     for d in range(0,len(dates)):
