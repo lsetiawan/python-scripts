@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 ''' Import the Necessary Libraries '''
 import os
 import pymodis.downmodis as pmod
@@ -79,26 +81,26 @@ def processHDF(folder,work_path):
                 QA_np = QA_src.ReadAsArray()
         
         
-			     # Let's take a quick look at the dimension of that first array
+                 # Let's take a quick look at the dimension of that first array
                 cols, rows = vi_np.shape
-			     # Perform value replacement and drop QA layer
+                 # Perform value replacement and drop QA layer
                 vi_np[np.logical_and(QA_np != 0, QA_np != 1)] = -3000
-			     # De-allocate QA array
+                 # De-allocate QA array
                 QA_np = None
-			     # Get Geotransforms and projection of original dataset
+                 # Get Geotransforms and projection of original dataset
                 geoT = vi_src.GetGeoTransform()
                 proj = vi_src.GetProjection()
         
-			     # Create new dataset to write array to
+                 # Create new dataset to write array to
                 outfile_name = os.path.join(os.getcwd(), makeFileName(hdf, 'tif'))
                 driver = gdal.GetDriverByName('GTiff')
-			     # Create empty dataset using array dimentions
+                 # Create empty dataset using array dimentions
                 dataset = driver.Create(outfile_name, cols, rows, 1, gdal.GDT_Int16)
                 dataset.SetGeoTransform(geoT)
                 dataset.SetProjection(proj)
                 dataset.GetRasterBand(1).SetNoDataValue(-3000)
                 dataset.GetRasterBand(1).WriteArray(vi_np)
-			     # Close datasets and unallocate arrays
+                 # Close datasets and unallocate arrays
                 dataset = None
                 vi_np = None
                 QA_np = None
@@ -147,8 +149,8 @@ def mosaicTile(newpath,folder, path, basepath):
         if ".tif" in image and ".aux.xml" not in image and ".DS_Store" not in image:        
             gdalMerge.append(os.path.join(newpath,image))
     subprocess.call(gdalMerge)
-	
-	
+
+
 
 
 def createTiles():
